@@ -32,3 +32,4 @@ Write-Host "To activate the virtual environment, run: .\venv\Scripts\Activate.ps
 Write-Host "To train the model, run: python train.py" -ForegroundColor Cyan
 Write-Host "To start the API server, run: python app.py" -ForegroundColor Cyan
 
+

@@ -28,3 +28,4 @@ curl -f http://localhost:5000/health || {
 echo "Deployment successful!"
 docker-compose ps
 
+

@@ -33,3 +33,4 @@ echo "To activate the virtual environment, run: source venv/bin/activate"
 echo "To train the model, run: python train.py"
 echo "To start the API server, run: python app.py"
 
+
