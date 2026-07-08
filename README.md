@@ -1,5 +1,9 @@
 # AI Model Project - Automated Training & Self-Hosting
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C)](https://pytorch.org/)
+
 This project provides a complete AI model pipeline with automated training, versioning, and self-hosting capabilities.
 
 ## Features
