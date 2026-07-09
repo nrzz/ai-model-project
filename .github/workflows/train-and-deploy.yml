@@ -68,7 +68,7 @@ jobs:
         fi
     
     - name: Create Release
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ steps.model_version.outputs.version }}
