@@ -38,16 +38,16 @@ def health():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    data = request.get_json()
+
+    if not data or 'text' not in data:
+        return jsonify({'error': 'Missing "text" field in request'}), 400
+
     if model_manager.model is None:
         return jsonify({
             'error': 'Model not loaded. Please train the model first.'
         }), 503
-    
-    data = request.get_json()
-    
-    if not data or 'text' not in data:
-        return jsonify({'error': 'Missing "text" field in request'}), 400
-    
+
     text = data['text']
     
     try:
