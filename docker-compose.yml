@@ -14,6 +14,7 @@ services:
       - PORT=5000
       - PYTHONUNBUFFERED=1
       - WORKERS=4
+      - RELOAD_TOKEN=${RELOAD_TOKEN:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/health')"]

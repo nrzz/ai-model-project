@@ -2,9 +2,25 @@ from flask import Flask, request, jsonify
 from model import ModelManager
 import os
 from datetime import datetime
+from functools import wraps
 
 app = Flask(__name__)
 model_manager = ModelManager()
+RELOAD_TOKEN = os.environ.get('RELOAD_TOKEN')
+
+
+def require_reload_token(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not RELOAD_TOKEN:
+            return jsonify({'error': 'Reload endpoint is disabled (RELOAD_TOKEN not configured)'}), 503
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header == f'Bearer {RELOAD_TOKEN}':
+            return f(*args, **kwargs)
+        if request.headers.get('X-Reload-Token') == RELOAD_TOKEN:
+            return f(*args, **kwargs)
+        return jsonify({'error': 'Unauthorized'}), 401
+    return decorated
 
 try:
     model_manager.load_model()
@@ -64,6 +80,7 @@ def predict_batch():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/reload', methods=['POST'])
+@require_reload_token
 def reload_model():
     try:
         model_path = request.get_json().get('model_path') if request.is_json else None

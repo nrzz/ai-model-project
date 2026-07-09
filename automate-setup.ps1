@@ -250,10 +250,7 @@ if ($remoteExists) {
 }
 
 Write-Host ""
-Write-Host "For detailed instructions, see:" -ForegroundColor Yellow
-Write-Host "  - SETUP_COMPLETE.md" -ForegroundColor Cyan
-Write-Host "  - PUSH_TO_GITHUB.md" -ForegroundColor Cyan
-Write-Host "  - LOCAL_DEPLOYMENT.md" -ForegroundColor Cyan
+Write-Host "For detailed instructions, see README.md" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""

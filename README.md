@@ -4,179 +4,102 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C)](https://pytorch.org/)
 
-This project provides a complete AI model pipeline with automated training, versioning, and self-hosting capabilities.
+Sentiment analysis pipeline with automated training, Docker deployment, and a Flask REST API.
 
 ## Features
 
-- 🤖 **Sentiment Analysis Model**: Pre-trained DistilBERT-based classifier
-- 🔄 **Automated Training**: GitHub Actions workflow for continuous training
-- 🐳 **Docker Support**: Containerized deployment for easy self-hosting
-- 📊 **Model Versioning**: Automatic versioning and artifact management
-- 🚀 **REST API**: Flask-based API for model inference
-- 📈 **Metrics Tracking**: Training metrics and model performance tracking
+- DistilBERT-based 3-class sentiment classifier (negative / neutral / positive)
+- Training script with automatic sample data generation
+- Model versioning with timestamped checkpoints plus `best_model.pt`
+- GitHub Actions CI/CD (train, test, build; deploy on manual trigger)
+- Docker and docker-compose for local or server hosting
+- Protected `/reload` endpoint (requires `RELOAD_TOKEN`)
 
 ## Project Structure
 
 ```
 ai-model-project/
-├── model.py              # Model architecture and manager
+├── model.py              # Model architecture and ModelManager
 ├── train.py              # Training script
 ├── app.py                # Flask API server
 ├── requirements.txt      # Python dependencies
-├── Dockerfile            # Docker image configuration
-├── docker-compose.yml    # Docker Compose setup
-├── .github/
-│   └── workflows/
-│       └── train-and-deploy.yml  # CI/CD pipeline
-├── models/               # Trained model files (gitignored)
-├── data/                 # Training data (gitignored)
-└── outputs/              # Training outputs and metrics (gitignored)
+├── Dockerfile
+├── docker-compose.yml
+├── .github/workflows/train-and-deploy.yml
+├── scripts/              # Setup and deployment helpers
+├── tests/                # Unit and API tests
+├── models/               # Trained weights (gitignored)
+├── data/                 # Training CSV (gitignored)
+└── outputs/              # Metrics JSON (gitignored)
 ```
 
 ## Quick Start
 
-### Local Development
+### Local development
 
-1. **Clone and setup**:
+**Windows:**
+```powershell
+.\setup.ps1
+```
+
+**Linux/macOS:**
 ```bash
-cd ai-model-project
+chmod +x setup.sh && ./setup.sh
+```
+
+**Manual setup:**
+```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-2. **Train the model**:
+Train and run:
 ```bash
 python train.py --data_path data/train.csv --num_epochs 3
-```
-
-3. **Run the API server**:
-```bash
 python app.py
-# Or with gunicorn:
-gunicorn --bind 0.0.0.0:5000 app:app
+# Or: gunicorn --bind 0.0.0.0:5000 --workers 4 app:app
 ```
 
-4. **Test the API**:
+Test the API:
 ```bash
+curl http://localhost:5000/health
 curl -X POST http://localhost:5000/predict \
   -H "Content-Type: application/json" \
   -d '{"text": "I love this product!"}'
 ```
 
-### Docker Deployment
+### Docker
 
-1. **Build and run**:
 ```bash
 docker-compose up -d
-```
-
-2. **Check logs**:
-```bash
 docker-compose logs -f
-```
-
-3. **Stop**:
-```bash
 docker-compose down
 ```
 
+Set `RELOAD_TOKEN` in `docker-compose.yml` (or an `.env` file) before using `/reload` in production.
+
 ## API Endpoints
 
-### Health Check
-```bash
-GET /health
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Service health and model load status |
+| POST | `/predict` | Single prediction (`{"text": "..."}`) |
+| POST | `/predict/batch` | Batch prediction (`{"texts": ["...", "..."]}`) |
+| POST | `/reload` | Reload model (requires auth token) |
 
-### Single Prediction
-```bash
-POST /predict
-Content-Type: application/json
+### Reload authentication
 
-{
-  "text": "This is a great product!"
-}
-```
+`/reload` is disabled unless `RELOAD_TOKEN` is set. When configured, send either:
 
-### Batch Prediction
-```bash
-POST /predict/batch
-Content-Type: application/json
+- `Authorization: Bearer <RELOAD_TOKEN>`, or
+- `X-Reload-Token: <RELOAD_TOKEN>`
 
-{
-  "texts": ["Great!", "Not bad", "Terrible"]
-}
-```
+Optional body: `{"model_path": "models/model_v20241128_015400.pt"}`
 
-### Reload Model
-```bash
-POST /reload
-Content-Type: application/json
+## Training Data
 
-{
-  "model_path": "models/model_v20241128_015400.pt"  # Optional
-}
-```
-
-## GitHub Actions Workflow
-
-The workflow automatically:
-1. **Trains** the model on push to main/develop or on schedule (daily at 2 AM)
-2. **Tests** the code and model loading
-3. **Builds** Docker image
-4. **Deploys** to self-hosted server (if configured)
-
-### Required Secrets
-
-Add these secrets to your GitHub repository:
-
-- `DOCKER_USERNAME`: Docker Hub username
-- `DOCKER_PASSWORD`: Docker Hub password or access token
-- `SSH_HOST`: Self-hosted server IP/hostname
-- `SSH_USERNAME`: SSH username
-- `SSH_PRIVATE_KEY`: SSH private key for deployment
-
-### Setting up Secrets
-
-1. Go to your repository → Settings → Secrets and variables → Actions
-2. Add each secret listed above
-
-## Self-Hosting Setup
-
-### On Your Server
-
-1. **Install Docker and Docker Compose**:
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install docker.io docker-compose
-sudo systemctl enable docker
-sudo systemctl start docker
-```
-
-2. **Clone repository**:
-```bash
-cd /opt
-git clone <your-repo-url> ai-model
-cd ai-model
-```
-
-3. **Configure deployment**:
-```bash
-# Update docker-compose.yml if needed
-docker-compose up -d
-```
-
-4. **Set up auto-update** (optional):
-```bash
-# Create a cron job to pull latest changes
-crontab -e
-# Add: 0 3 * * * cd /opt/ai-model && git pull && docker-compose up -d --build
-```
-
-## Training Data Format
-
-The training script expects a CSV file with the following format:
+CSV format (`data/train.csv`):
 
 ```csv
 text,label
@@ -185,66 +108,125 @@ text,label
 "Terrible experience",0
 ```
 
-Labels:
-- `0`: Negative
-- `1`: Neutral
-- `2`: Positive
+Labels: `0` = negative, `1` = neutral, `2` = positive.
+
+If the file is missing, `train.py` creates a small sample dataset automatically.
 
 ## Model Versioning
 
-Models are automatically versioned with timestamps:
-- Format: `model_vYYYYMMDD_HHMMSS.pt`
-- Best model is saved as `best_model.pt`
-- Metrics are saved in `outputs/metrics_*.json`
+On each validation improvement during training:
+
+- Timestamped checkpoint: `models/model_vYYYYMMDD_HHMMSS.pt`
+- Best weights symlinked copy: `models/best_model.pt` (loaded by default at API startup)
+- Metrics: `outputs/metrics_YYYYMMDD_HHMMSS.json`
+
+## GitHub Setup
+
+### 1. Create and push the repository
+
+1. Create a new repo on GitHub (do not add README, license, or .gitignore).
+2. Connect and push:
+
+```bash
+git remote add origin https://github.com/YOUR_USERNAME/ai-model-project.git
+git branch -M main
+git push -u origin main
+```
+
+Or on Windows: `.\scripts\setup-git.ps1 -GitHubUsername YOUR_USERNAME`
+
+Use a [Personal Access Token](https://github.com/settings/tokens) if password auth fails.
+
+### 2. Configure Actions secrets
+
+Repository → **Settings** → **Secrets and variables** → **Actions**:
+
+| Secret | Purpose |
+|--------|---------|
+| `DOCKER_USERNAME` | Docker Hub username (optional, for image push) |
+| `DOCKER_PASSWORD` | Docker Hub password or access token |
+| `SSH_HOST` | Remote server hostname/IP (for remote deploy) |
+| `SSH_USERNAME` | SSH user |
+| `SSH_PRIVATE_KEY` | SSH private key (full PEM content) |
+
+### 3. Self-hosted runner (optional, for local deploy)
+
+1. Repo → **Settings** → **Actions** → **Runners** → **New self-hosted runner** → Windows.
+2. Run `.\scripts\setup-self-hosted-runner.ps1` with the registration token.
+3. Install as a service:
+   ```powershell
+   cd actions-runner
+   .\svc.cmd install
+   .\svc.cmd start
+   ```
+
+## CI/CD Workflow
+
+File: `.github/workflows/train-and-deploy.yml`
+
+| Trigger | Behavior |
+|---------|----------|
+| Push to `main` / `master` / `develop` | Train (non-PR), test, build image |
+| Pull request | Test only |
+| Schedule (daily 02:00 UTC) | Train and build (no Docker push) |
+| `workflow_dispatch` | Full pipeline including deploy jobs |
+
+Deploy jobs (`deploy-local`, `deploy-remote`) run **only** on manual `workflow_dispatch`, not on every push.
+
+Test failures block the pipeline. Docker push and remote deploy are skipped when the corresponding secrets are unset.
+
+## Self-Hosting
+
+### Linux server
+
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin
+cd /opt && sudo git clone https://github.com/YOUR_USERNAME/ai-model-project.git ai-model
+cd ai-model
+docker compose up -d
+curl http://localhost:5000/health
+```
+
+Optional cron auto-update:
+```bash
+0 3 * * * cd /opt/ai-model && git pull && docker compose up -d --build
+```
+
+### Windows local deployment
+
+```powershell
+git pull
+.\scripts\deploy-local.ps1
+# Or: docker-compose down && docker-compose build && docker-compose up -d
+```
+
+## Running Tests
+
+```bash
+pip install pytest pytest-cov
+python -m pytest tests/ -v
+```
 
 ## Customization
 
-### Change Model Architecture
-
-Edit `model.py` to modify the model architecture.
-
-### Adjust Training Parameters
-
-Modify `train.py` or pass arguments:
-```bash
-python train.py --num_epochs 5 --batch_size 32 --learning_rate 3e-5
-```
-
-### Change API Behavior
-
-Edit `app.py` to add new endpoints or modify existing ones.
-
-## Monitoring
-
-- Check API health: `curl http://localhost:5000/health`
-- View Docker logs: `docker-compose logs -f ai-model`
-- Check training metrics: `cat outputs/metrics_*.json`
+- **Model architecture:** edit `model.py`
+- **Training hyperparameters:** `python train.py --num_epochs 5 --batch_size 32 --learning_rate 3e-5`
+- **API routes:** edit `app.py`
+- **Workflow:** edit `.github/workflows/train-and-deploy.yml`
 
 ## Troubleshooting
 
-### Model not found error
-- Train the model first: `python train.py`
-- Ensure model files exist in `models/` directory
-
-### Docker build fails
-- Check Docker is running: `docker ps`
-- Verify Dockerfile syntax
-- Check disk space: `df -h`
-
-### Training fails
-- Verify data file exists and format is correct
-- Check GPU availability: `nvidia-smi` (if using GPU)
-- Reduce batch size if out of memory
+| Issue | Fix |
+|-------|-----|
+| Model not found | Run `python train.py`; confirm `models/best_model.pt` exists |
+| Docker healthcheck fails | `requests` is in `requirements.txt`; rebuild the image |
+| `/reload` returns 401 | Set `RELOAD_TOKEN` and send the Bearer or `X-Reload-Token` header |
+| `/reload` returns 503 | `RELOAD_TOKEN` is not configured |
+| Training OOM | Lower `--batch_size` |
+| Port 5000 in use | Change the host port in `docker-compose.yml` |
+| GitHub Actions deploy skipped | Use **Actions → Train and Deploy AI Model → Run workflow** |
+| Runner offline | `cd actions-runner; .\run.cmd` or restart the Windows service |
 
 ## License
 
-MIT License - feel free to use this project for your own purposes.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-
+MIT License

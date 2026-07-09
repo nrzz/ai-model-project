@@ -168,6 +168,7 @@ def train_model(
             manager = ModelManager(model_dir)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             model_path = manager.save_model(model, tokenizer, version=timestamp)
+            manager.save_model(model, tokenizer)
             
             report = classification_report(val_labels_list, val_predictions, output_dict=True)
             metrics = {
