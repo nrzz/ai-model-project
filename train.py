@@ -53,18 +53,17 @@ def create_sample_data(data_path):
     os.makedirs(os.path.dirname(data_path), exist_ok=True)
     sample_data = {
         'text': [
-            'I love this product!',
-            'This is okay, nothing special.',
-            'Terrible experience, would not recommend.',
-            'Amazing quality and fast delivery!',
-            'Not bad, but could be better.',
-            'Worst purchase I have ever made.',
-            'Great value for money!',
-            'Average product, meets expectations.',
-            'Absolutely fantastic!',
-            'Poor quality, very disappointed.'
+            'I love this product!', 'Amazing quality and fast delivery!', 'Great value for money!',
+            'Absolutely fantastic!', 'Best purchase ever!', 'Highly recommend this!',
+            'Outstanding service!', 'Exceeded my expectations!', 'Perfect!', 'Wonderful experience!',
+            'This is okay, nothing special.', 'Not bad, but could be better.',
+            'Average product, meets expectations.', 'Decent enough.', 'It is fine I guess.',
+            'Middle of the road.', 'Acceptable quality.', 'Neither good nor bad.', 'So-so product.', 'Fair enough.',
+            'Terrible experience, would not recommend.', 'Worst purchase I have ever made.',
+            'Poor quality, very disappointed.', 'Complete waste of money.', 'Awful product.',
+            'Very unhappy with this.', 'Do not buy this.', 'Horrible experience.', 'Regret buying this.', 'Trash quality.',
         ],
-        'label': [2, 1, 0, 2, 1, 0, 2, 1, 2, 0]
+        'label': [2] * 10 + [1] * 10 + [0] * 10
     }
     df = pd.DataFrame(sample_data)
     df.to_csv(data_path, index=False)
