@@ -1,232 +1,232 @@
 name: Train and Deploy AI Model
 
 on:
-  push:
-    branches:
-      - main
-      - master
-      - develop
   pull_request:
     branches:
       - main
       - master
-  schedule:
-    - cron: '0 2 * * *'
   workflow_dispatch:
+    inputs:
+      train_model:
+        description: 'Run model training (heavy job)'
+        required: false
+        default: false
+        type: boolean
+      publish_docker:
+        description: 'Push Docker image to registry'
+        required: false
+        default: false
+        type: boolean
 
 env:
   PYTHON_VERSION: '3.10'
 
-jobs:
-  train:
-    runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    
-    - name: Train model
-      run: |
-        mkdir -p data
-        python train.py \
-          --data_path data/train.csv \
-          --num_epochs 3 \
-          --batch_size 16 \
-          --model_dir models
-    
-    - name: Upload model artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: model-artifacts
-        path: |
-          models/*.pt
-          outputs/*.json
-        retention-days: 30
-    
-    - name: Get model version
-      id: model_version
-      run: |
-        MODEL_FILE=$(ls -t models/model_v*.pt 2>/dev/null | head -1 || echo "")
-        if [ -n "$MODEL_FILE" ]; then
-          VERSION=$(basename "$MODEL_FILE" .pt | sed 's/model_v//')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Model version: $VERSION"
-        else
-          echo "version=latest" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Create Release
-      if: github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ steps.model_version.outputs.version }}
-        name: Model v${{ steps.model_version.outputs.version }}
-        files: |
-          models/*.pt
-          outputs/*.json
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+permissions:
+  contents: read
+  packages: write
 
+jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov
-    
-    - name: Run tests
-      run: python -m pytest tests/ -v --cov=. --cov-report=xml
-    
-    - name: Test model loading
-      run: python -c "from model import ModelManager; print('Model imports successfully')"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --cov=. --cov-report=xml
+
+      - name: Test model loading
+        run: python -c "from model import ModelManager; print('Model imports successfully')"
+
+  train:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.train_model
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Train model
+        run: |
+          mkdir -p data
+          python train.py \
+            --data_path data/train.csv \
+            --num_epochs 3 \
+            --batch_size 16 \
+            --model_dir models
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts
+          path: |
+            models/*.pt
+            outputs/*.json
+          retention-days: 30
+
+      - name: Get model version
+        id: model_version
+        run: |
+          MODEL_FILE=$(ls -t models/model_v*.pt 2>/dev/null | head -1 || echo "")
+          if [ -n "$MODEL_FILE" ]; then
+            VERSION=$(basename "$MODEL_FILE" .pt | sed 's/model_v//')
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.model_version.outputs.version }}
+          name: Model v${{ steps.model_version.outputs.version }}
+          files: |
+            models/*.pt
+            outputs/*.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    needs: [train, test]
+    needs: [train]
     runs-on: ubuntu-latest
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name != 'pull_request'
-    
+    if: github.event_name == 'workflow_dispatch' && inputs.train_model
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Download model artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: model-artifacts
-        path: models/
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Check Docker credentials
-      id: docker_creds
-      run: |
-        if [ -n "$DOCKER_USERNAME" ]; then
-          echo "configured=true" >> $GITHUB_OUTPUT
-        else
-          echo "configured=false" >> $GITHUB_OUTPUT
-        fi
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-    
-    - name: Login to Docker Hub
-      if: steps.docker_creds.outputs.configured == 'true' && github.event_name != 'schedule'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    
-    - name: Build and push Docker image
-      if: steps.docker_creds.outputs.configured == 'true'
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: ${{ github.event_name != 'schedule' }}
-        tags: |
-          ${{ secrets.DOCKER_USERNAME }}/ai-model:latest
-          ${{ secrets.DOCKER_USERNAME }}/ai-model:${{ github.sha }}
-        cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/ai-model:buildcache
-        cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/ai-model:buildcache,mode=max
-    
-    - name: Build Docker image (local only)
-      if: steps.docker_creds.outputs.configured == 'false'
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: false
-        tags: ai-model:latest
-        load: true
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download model artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: model-artifacts
+          path: models/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Check Docker credentials
+        id: docker_creds
+        run: |
+          if [ -n "$DOCKER_USERNAME" ]; then
+            echo "configured=true" >> $GITHUB_OUTPUT
+          else
+            echo "configured=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+      - name: Login to Docker Hub
+        if: steps.docker_creds.outputs.configured == 'true' && inputs.publish_docker
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        if: steps.docker_creds.outputs.configured == 'true' && inputs.publish_docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/ai-model:latest
+            ${{ secrets.DOCKER_USERNAME }}/ai-model:${{ github.sha }}
+
+      - name: Build Docker image (local only)
+        if: steps.docker_creds.outputs.configured == 'false' || !inputs.publish_docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ai-model:latest
+          load: true
 
   deploy-local:
     needs: [build]
     runs-on: self-hosted
-    if: github.event_name == 'workflow_dispatch'
-    
+    if: github.event_name == 'workflow_dispatch' && inputs.train_model
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Download model artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: model-artifacts
-        path: models/
-    
-    - name: Stop existing containers
-      run: docker-compose down || true
-    
-    - name: Build and start containers
-      run: |
-        docker-compose build
-        docker-compose up -d
-    
-    - name: Wait for service
-      run: timeout 30 bash -c 'until curl -f http://localhost:5000/health; do sleep 2; done'
-    
-    - name: Show service status
-      run: |
-        docker-compose ps
-        docker-compose logs --tail=20
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download model artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: model-artifacts
+          path: models/
+
+      - name: Stop existing containers
+        run: docker-compose down || true
+
+      - name: Build and start containers
+        run: |
+          docker-compose build
+          docker-compose up -d
+
+      - name: Wait for service
+        run: timeout 30 bash -c 'until curl -f http://localhost:5000/health; do sleep 2; done'
 
   deploy-remote:
     needs: [build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-    
+    if: github.event_name == 'workflow_dispatch' && inputs.train_model
+
     steps:
-    - name: Check SSH credentials
-      id: ssh_creds
-      run: |
-        if [ -n "$SSH_HOST" ]; then
-          echo "configured=true" >> $GITHUB_OUTPUT
-        else
-          echo "configured=false" >> $GITHUB_OUTPUT
-        fi
-      env:
-        SSH_HOST: ${{ secrets.SSH_HOST }}
-    
-    - name: Checkout code
-      if: steps.ssh_creds.outputs.configured == 'true'
-      uses: actions/checkout@v4
-    
-    - name: Deploy to self-hosted server
-      if: steps.ssh_creds.outputs.configured == 'true'
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.SSH_HOST }}
-        username: ${{ secrets.SSH_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        script: |
-          cd /opt/ai-model || cd ~/ai-model || cd ./ai-model-project
-          git pull origin main || git pull origin master
-          docker-compose down || true
-          docker-compose pull || docker-compose build
-          docker-compose up -d
-          sleep 10
-          docker-compose logs --tail=50
+      - name: Check SSH credentials
+        id: ssh_creds
+        run: |
+          if [ -n "$SSH_HOST" ]; then
+            echo "configured=true" >> $GITHUB_OUTPUT
+          else
+            echo "configured=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+
+      - name: Checkout code
+        if: steps.ssh_creds.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - name: Deploy to self-hosted server
+        if: steps.ssh_creds.outputs.configured == 'true'
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/ai-model || cd ~/ai-model || cd ./ai-model-project
+            git pull origin main || git pull origin master
+            docker-compose down || true
+            docker-compose pull || docker-compose build
+            docker-compose up -d
+            sleep 10
+            docker-compose logs --tail=50
