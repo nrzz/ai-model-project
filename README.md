@@ -181,7 +181,7 @@ Test failures block the pipeline. Docker push and remote deploy are skipped when
 
 ```bash
 sudo apt update && sudo apt install -y docker.io docker-compose-plugin
-cd /opt && sudo git clone https://github.com/YOUR_USERNAME/ai-model-project.git ai-model
+cd /opt && sudo git clone https://github.com/nrzz/ai-model-project.git ai-model
 cd ai-model
 docker compose up -d
 curl http://localhost:5000/health
